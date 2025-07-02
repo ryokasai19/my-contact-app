@@ -2,17 +2,16 @@
 
 import { google } from "googleapis";
 import { auth } from "./google-api-client";
-import { Readable } from "stream"; // ✅ Import the 'Readable' stream utility
+import { Readable } from "stream";
 
 const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "";
 
 const drive = google.drive({ version: "v3", auth });
 
-// This function converts a Buffer to a Stream
 function bufferToStream(buffer: Buffer) {
   const stream = new Readable();
   stream.push(buffer);
-  stream.push(null); // Signals the end of the stream
+  stream.push(null);
   return stream;
 }
 
@@ -45,10 +44,7 @@ export async function getOrCreateCompanyFolder(companyName: string): Promise<str
 async function uploadFileToDrive(fileBuffer: Buffer, fileName: string, mimeType: string, folderId: string): Promise<string> {
   const response = await drive.files.create({
     requestBody: { name: fileName, parents: [folderId] },
-    media: {
-      mimeType,
-      body: bufferToStream(fileBuffer), // ✅ Use the stream here instead of the raw buffer
-    },
+    media: { mimeType: mimeType || 'application/octet-stream', body: bufferToStream(fileBuffer) },
     fields: "id, webViewLink",
     supportsAllDrives: true,
   });
@@ -72,6 +68,21 @@ export async function uploadMultipleFiles(
     return { folderId, folderLink, fileLinks };
   } catch (error) {
     console.error("Error in uploadMultipleFiles:", error);
+    throw error;
+  }
+}
+
+// ✅ ADDING THIS FUNCTION BACK
+export async function getFolderInfo(folderId: string) {
+  try {
+    const response = await drive.files.get({
+      fileId: folderId,
+      fields: "id, name, webViewLink",
+      supportsAllDrives: true,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error getting folder info:", error);
     throw error;
   }
 }
