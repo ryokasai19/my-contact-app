@@ -1,50 +1,70 @@
 "use client"
 
 import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { toast } from "sonner"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { ImageUploader } from "@/components/image-uploader"
 import { AudioRecorder } from "@/components/audio-recorder"
 import { CompletionModal } from "@/components/completion-modal"
 import { submitData } from "@/lib/actions"
+import { Loader2 } from "lucide-react"
+
+// Define a schema for file uploads using Zod
+const formSchema = z.object({
+  image: z
+    .instanceof(File, { message: "画像ファイルを選択してください。" })
+    .refine((file) => file.size > 0, "画像ファイルは必須です。"),
+  audio: z
+    .instanceof(Blob, { message: "音声ファイルを録音してください。" })
+    .refine((blob) => blob.size > 0, "音声ファイルは必須です。"),
+})
 
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isModalOpen, setModalOpen] = useState(false)
-
-  // State for the uploaded files
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-
-  // This flag will be used to reset the child components
   const [resetKey, setResetKey] = useState(0)
 
-  const handleFormSubmit = async (formData: FormData) => {
-    // Append the files from state to the form data
-    if (imageFile) {
-      formData.append("image", imageFile)
-    }
-    if (audioBlob) {
-      formData.append("audio", audioBlob)
-    }
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      image: new File([], ""),
+      audio: new Blob(),
+    },
+  })
 
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
+    toast.info("データを処理中...", {
+      description: "完了までしばらくお待ちください。",
+    })
+
+    const formData = new FormData()
+    formData.append("image", values.image)
+    formData.append("audio", values.audio)
+
     const result = await submitData(formData)
+
     setIsLoading(false)
 
     if (result.success) {
+      toast.success("処理が完了しました！")
       setModalOpen(true)
     } else {
-      // You can use a more sophisticated notification system like a toast
-      alert(`Error: ${result.error}`)
+      toast.error("エラーが発生しました", {
+        description: result.error,
+      })
     }
   }
 
   const handleNewInput = () => {
     setModalOpen(false)
-    setImageFile(null)
-    setAudioBlob(null)
-    // Change the key to trigger a reset in the child components
+    form.reset()
     setResetKey((prevKey) => prevKey + 1)
   }
 
@@ -56,21 +76,56 @@ export default function HomePage() {
           <CardDescription>名刺の写真と補足音声をアップロードして記録します。</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={handleFormSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">1. 名刺の写真をアップロード</label>
-              <ImageUploader key={`image-${resetKey}`} onImageSelected={setImageFile} imageFile={imageFile} />
-            </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="image"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>1. 名刺の写真をアップロード</FormLabel>
+                    <FormControl>
+                      <ImageUploader
+                        key={`image-${resetKey}`}
+                        onImageSelected={(file) => field.onChange(file)}
+                        imageFile={field.value}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">2. 補足音声を録音</label>
-              <AudioRecorder key={`audio-${resetKey}`} onRecorded={setAudioBlob} shouldReset={resetKey > 0} />
-            </div>
+              <FormField
+                control={form.control}
+                name="audio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>2. 補足音声を録音</FormLabel>
+                    <FormControl>
+                      <AudioRecorder
+                        key={`audio-${resetKey}`}
+                        onRecorded={(blob) => field.onChange(blob)}
+                        shouldReset={resetKey > 0 && form.formState.isSubmitSuccessful}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <Button type="submit" disabled={isLoading || !imageFile || !audioBlob || audioBlob.size === 0} className="w-full">
-              {isLoading ? "処理中..." : "送信"}
-            </Button>
-          </form>
+              <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    処理中...
+                  </>
+                ) : (
+                  "送信"
+                )}
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
 
