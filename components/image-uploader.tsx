@@ -49,9 +49,9 @@ export function ImageUploader({ onImageSelected, imageFile }: ImageUploaderProps
     const file = e.target.files?.[0]
     if (!file) return
 
-    // ファイルサイズチェック (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError("画像サイズが大きすぎます (最大5MB)")
+    // ファイルサイズチェック (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("画像サイズが大きすぎます (最大10MB)")
       return
     }
 
