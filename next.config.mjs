@@ -15,4 +15,6 @@ const nextConfig = {
   },
 };
 
+export const maxRequestBodySize = '10mb';
+
 export default nextConfig;

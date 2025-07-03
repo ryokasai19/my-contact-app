@@ -3,6 +3,8 @@ import { processAudio } from "@/lib/openai"
 import { extractInfoFromImage } from "@/lib/openai-vision"
 import { appendToSheet } from "@/lib/google-sheets"
 
+export const maxRequestBodySize = '10mb';
+
 // 最大ファイルサイズ (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -112,21 +114,54 @@ export async function POST(req: NextRequest) {
           )
         }
 
-        await appendToSheet(sheetId, "A:J", [
-          // "Sheet1!"プレフィックスを削除
-          [
-            extractedInfo.company,
-            extractedInfo.name,
-            extractedInfo.email,
-            extractedInfo.phone,
-            extractedInfo.jobTitle || "",
-            extractedInfo.badgeId || "",
-            transcription,
-            summary,
-            "Google Drive連携は無効化されました",
-            "Google Drive連携は無効化されました",
-          ],
-        ])
+        // 型ガード: extractedInfoが単一カード情報かどうかを判定
+        function isSingleCard(
+          info: any
+        ): info is {
+          company: string
+          name: string
+          email: string
+          phone: string
+          jobTitle: string
+          badgeId: string
+        } {
+          return (
+            typeof info === "object" &&
+            info !== null &&
+            typeof info.company === "string" &&
+            typeof info.name === "string" &&
+            typeof info.email === "string" &&
+            typeof info.phone === "string" &&
+            ("jobTitle" in info) &&
+            ("badgeId" in info)
+          )
+        }
+
+        if (!isSingleCard(extractedInfo)) {
+          // 複数名刺または不明な型の場合はエラー
+          return NextResponse.json(
+            {
+              success: false,
+              error: "名刺情報の抽出に失敗しました。1枚の名刺のみをアップロードしてください。",
+            },
+            { status: 400 },
+          )
+        }
+
+        // appendToSheet expects a SheetData object, not a string[][]
+        await appendToSheet({
+          company: extractedInfo.company,
+          name: extractedInfo.name,
+          email: extractedInfo.email,
+          phone: extractedInfo.phone,
+          jobTitle: extractedInfo.jobTitle || "",
+          badgeId: extractedInfo.badgeId || "",
+          transcription,
+          summary,
+          folderLink: (extractedInfo as any).folderLink || "",
+          imageLink: (extractedInfo as any).imageLink || "",
+          audioLink: (extractedInfo as any).audioLink || "",
+        })
 
         console.log("Data appended to sheet successfully")
         return NextResponse.json({ success: true })
